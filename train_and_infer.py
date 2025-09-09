@@ -3,7 +3,7 @@ import shutil
 import xml.etree.ElementTree as ET
 from ultralytics import YOLO
 import cv2
-import os
+
 
 
 # CONFIG
@@ -39,11 +39,11 @@ for idx, xml_file in enumerate(xml_files):
     root = tree.getroot()
 
     # Get image info
-    filename = root.find("filename").text
+    filename = root.find("filename").text.strip()
     img_w = int(root.find("size/width").text)
     img_h = int(root.find("size/height").text)
 
-    # Choose split (simple: 80% train, 20% val)
+    # Split: 80% train, 20% val
     split = "train" if idx < int(0.8 * len(xml_files)) else "val"
 
     yolo_lines = []
@@ -85,19 +85,31 @@ for idx, xml_file in enumerate(xml_files):
 
         yolo_lines.append(f"{class_id} {x_center:.6f} {y_center:.6f} {w:.6f} {h:.6f}")
 
-    # Save label file
-    base_name = os.path.splitext(filename)[0]
-    txt_path = os.path.join(labels_out, split, base_name + ".txt")
-    with open(txt_path, "w") as f:
-        f.write("\n".join(yolo_lines))
+    # Prepare filenames (handle cases with or without extension)
+    base_name, ext = os.path.splitext(filename)
+    if not ext:  # if no extension in XML, assume .jpg
+        ext = ".jpg"
+
+    # Save label file only if there are boxes
+    if yolo_lines:
+        txt_path = os.path.join(labels_out, split, base_name + ".txt")
+        with open(txt_path, "w") as f:
+            f.write("\n".join(yolo_lines))
+    else:
+        print(f"⚠️ No objects found in {xml_file}, skipping label file.")
 
     # Copy corresponding image into images/ folder
-    src_img_path = os.path.join(image_folder, filename + ".jpg")  # adjust extension if needed
-    dst_img_path = os.path.join(images_out, split, filename + ".jpg")
+    src_img_path = os.path.join(image_folder, base_name + ext)
+    dst_img_path = os.path.join(images_out, split, base_name + ext)
+
     if os.path.exists(src_img_path):
         shutil.copy(src_img_path, dst_img_path)
+        print(f"✅ Processed {filename} -> {split}")
+    else:
+        print(f"⚠️ Image not found for {filename}, expected at {src_img_path}")
 
 print("✅ Conversion finished! YOLO dataset ready in:", dataset_folder)
+
 
 # Code: Train + Inference code 
 
@@ -122,18 +134,26 @@ def train_yolo():
 
 
 def run_inference(model_path, test_folder="dataset/images/val", output_folder="predictions"):
+    # Make sure output folder exists
     os.makedirs(output_folder, exist_ok=True)
 
+    # Load trained YOLO model
     model = YOLO(model_path)
 
-    # Run prediction
-    results = model.predict(source=test_folder, save=True, save_txt=True, project=output_folder)
+    # Run prediction (only draws boxes, no label comparison)
+    results = model.predict(
+        source=test_folder,     # folder of test images (unlabeled)
+        save=True,              # save images with boxes
+        save_txt=False,         # don't save YOLO-format predictions
+        project=output_folder,  # save results inside predictions/
+        name="predict"          # subfolder name
+    )
 
     print("✅ Predictions saved in:", results[0].save_dir)
 
-    # OPTIONAL: display the images with boxes
+    # OPTIONAL: Display results using OpenCV
     for r in results:
-        img_with_boxes = r.plot()   # numpy array with bounding boxes
+        img_with_boxes = r.plot()   # numpy array with boxes
         cv2.imshow("Detections", img_with_boxes)
         cv2.waitKey(0)              # press any key for next image
     cv2.destroyAllWindows()
