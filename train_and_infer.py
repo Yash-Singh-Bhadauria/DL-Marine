@@ -54,16 +54,28 @@ for idx, xml_file in enumerate(xml_files):
             continue
         class_id = class_map[class_name]
 
-        # Get point
         point = obj.find("point")
-        x = int(point.find("x").text)
-        y = int(point.find("y").text)
+        bndbox = obj.find("bndbox")
 
-        # Convert point → bbox
-        xmin = max(0, x - BOX_WIDTH // 2)
-        ymin = max(0, y - BOX_HEIGHT // 2)
-        xmax = min(img_w, x + BOX_WIDTH // 2)
-        ymax = min(img_h, y + BOX_HEIGHT // 2)
+        if point is not None:
+            # Case 1: Point annotation
+            x = int(point.find("x").text)
+            y = int(point.find("y").text)
+
+            xmin = max(0, x - BOX_WIDTH // 2)
+            ymin = max(0, y - BOX_HEIGHT // 2)
+            xmax = min(img_w, x + BOX_WIDTH // 2)
+            ymax = min(img_h, y + BOX_HEIGHT // 2)
+
+        elif bndbox is not None:
+            # Case 2: Bounding box annotation
+            xmin = int(bndbox.find("xmin").text)
+            ymin = int(bndbox.find("ymin").text)
+            xmax = int(bndbox.find("xmax").text)
+            ymax = int(bndbox.find("ymax").text)
+
+        else:
+            continue  # skip if neither exists
 
         # Convert to YOLO format
         x_center = (xmin + xmax) / 2.0 / img_w
