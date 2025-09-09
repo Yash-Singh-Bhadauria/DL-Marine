@@ -4,8 +4,6 @@ import xml.etree.ElementTree as ET
 from ultralytics import YOLO
 import cv2
 
-
-
 # CONFIG
 # ---------------------------
 xml_folder = "annotations_xml"        # folder containing your XML files
@@ -38,8 +36,11 @@ for idx, xml_file in enumerate(xml_files):
     tree = ET.parse(os.path.join(xml_folder, xml_file))
     root = tree.getroot()
 
-    # Get image info
-    filename = root.find("filename").text.strip()
+    # ✅ Use XML file's own name instead of <filename> tag
+    base_name, _ = os.path.splitext(xml_file)
+    filename = base_name + ".jpg"
+
+    # Get image size from XML
     img_w = int(root.find("size/width").text)
     img_h = int(root.find("size/height").text)
 
@@ -85,11 +86,6 @@ for idx, xml_file in enumerate(xml_files):
 
         yolo_lines.append(f"{class_id} {x_center:.6f} {y_center:.6f} {w:.6f} {h:.6f}")
 
-    # Prepare filenames (handle cases with or without extension)
-    base_name, ext = os.path.splitext(filename)
-    if not ext:  # if no extension in XML, assume .jpg
-        ext = ".jpg"
-
     # Save label file only if there are boxes
     if yolo_lines:
         txt_path = os.path.join(labels_out, split, base_name + ".txt")
@@ -99,8 +95,8 @@ for idx, xml_file in enumerate(xml_files):
         print(f"⚠️ No objects found in {xml_file}, skipping label file.")
 
     # Copy corresponding image into images/ folder
-    src_img_path = os.path.join(image_folder, base_name + ext)
-    dst_img_path = os.path.join(images_out, split, base_name + ext)
+    src_img_path = os.path.join(image_folder, filename)
+    dst_img_path = os.path.join(images_out, split, filename)
 
     if os.path.exists(src_img_path):
         shutil.copy(src_img_path, dst_img_path)
@@ -109,6 +105,7 @@ for idx, xml_file in enumerate(xml_files):
         print(f"⚠️ Image not found for {filename}, expected at {src_img_path}")
 
 print("✅ Conversion finished! YOLO dataset ready in:", dataset_folder)
+
 
 
 # Code: Train + Inference code 
